@@ -1002,7 +1002,19 @@ var wtregex = /(^\s|\s$|\n)/;
 function writetag(f,g) {return '<' + f + (g.match(wtregex)?' xml:space="preserve"' : "") + '>' + g + '</' + f + '>';}
 
 function wxt_helper(h) { return keys(h).map(function(k) { return " " + k + '="' + h[k] + '"';}).join(""); }
-function writextag(f,g,h) { return '<' + f + (isval(h) ? wxt_helper(h) : "") + (isval(g) ? (g.match(wtregex)?' xml:space="preserve"' : "") + '>' + g + '</' + f : "/") + '>';}
+function writextag(f,g,h) 
+{ 
+	var obj = '';
+	if(f == 'c' && g == "<v>undefined</v>")
+	{
+		obj = '<' + f + ' r="' + h.r + '" s="' + h.s + '" />';
+	}
+	else
+	{
+		obj = '<' + f + (isval(h) ? wxt_helper(h) : "") + (isval(g) ? (g.match(wtregex)?' xml:space="preserve"' : "") + '>' + g + '</' + f : "/") + '>';
+	}
+	return obj;
+}
 
 function write_w3cdtf(d, t) { try { return d.toISOString().replace(/\.\d*/,""); } catch(e) { if(t) throw e; } }
 
@@ -2792,7 +2804,7 @@ function get_sst_id(sst, str) {
 
 function get_cell_style(styles, cell, opts) {
   if (typeof style_builder != 'undefined') {
-    if (/^\d+$/.exec(cell.s)) { return cell.s}  // if its already an integer index, let it be
+
     if (cell.s && (cell.s == +cell.s)) { return cell.s}  // if its already an integer index, let it be
     if (!cell.s) cell.s = {}
     if (cell.z) cell.s.numFmt = cell.z;
@@ -2975,7 +2987,7 @@ function write_ws_xml_cols(ws, cols) {
 }
 
 function write_ws_xml_cell(cell, ref, ws, opts, idx, wb) {
-	if(cell.v === undefined) return "";
+	//if(cell.v === undefined) return "";
 	var vv = "";
 	var oldt = cell.t, oldv = cell.v;
 	switch(cell.t) {
@@ -3009,7 +3021,8 @@ function write_ws_xml_cell(cell, ref, ws, opts, idx, wb) {
 			o.t = "str"; break;
 	}
 	if(cell.t != oldt) { cell.t = oldt; cell.v = oldv; }
-	return writextag('c', v, o);
+	var obj = writextag('c', v, o);
+	return obj;
 }
 
 var parse_ws_xml_data = (function parse_ws_xml_data_factory() {
@@ -5178,14 +5191,13 @@ function readSync(data, opts) {
 }
 
 function readFileSync(data, opts) {
-	var o = opts||{}; o.type = 'file'
-  var wb = readSync(data, o);
-  wb.FILENAME = data;
-	return wb;
+	var o = opts||{}; o.type = 'file';
+	return readSync(data, o);
 }
 
 function writeSync(wb, opts) {
 	var o = opts||{};
+  console.log("Creating stylebuilder")
   style_builder  = new StyleBuilder(opts);
 
   var z = write_zip(wb, o);
@@ -5462,14 +5474,8 @@ var XmlNode = (function () {
     return this;
   }
 
-  var APOS = "'"; QUOTE = '"'
-  var ESCAPED_QUOTE = {  }
-  ESCAPED_QUOTE[QUOTE] = '&quot;'
-  ESCAPED_QUOTE[APOS] = '&apos;'
-
-  XmlNode.prototype.escapeAttributeValue = function(att_value) {
-    return '"' + att_value.replace(/\"/g,'&quot;') + '"';// TODO Extend with four other codes
-
+  XmlNode.prototype.escapeString = function(str) {
+    return str.replace(/\"/g,'&quot;') // TODO Extend with four other codes
   }
 
   XmlNode.prototype.toXml = function (node) {
@@ -5478,7 +5484,7 @@ var XmlNode = (function () {
     xml += '<' + node.tagName;
     if (node._attributes) {
       for (var key in node._attributes) {
-        xml += ' ' + key + '=' + this.escapeAttributeValue(''+node._attributes[key]) + ''
+        xml += ' ' + key + '="' + this.escapeString(''+node._attributes[key]) + '"'
       }
     }
     if (node._children && node._children.length > 0) {
@@ -5597,15 +5603,24 @@ if ((typeof 'module' != 'undefined'  && typeof require != 'undefined') || (typeo
         if (!defaultStyle.font) defaultStyle.font = {name: 'Calibri', sz: '12'};
         if (!defaultStyle.font.name) defaultStyle.font.name = 'Calibri';
         if (!defaultStyle.font.sz) defaultStyle.font.sz = 11;
-        if (!defaultStyle.fill) defaultStyle.fill = { fgColor: { patternType: "none"}};
-        if (!defaultStyle.border) defaultStyle.border = {};
+        //if (!defaultStyle.fill) defaultStyle.fill = { fgColor: { patternType: "none"}};
+        if (!defaultStyle.fill) defaultStyle.fill = { patternType: "none"};
+        if (!defaultStyle.border) defaultStyle.border = {}
+        	/*{
+        		top: {color: 'ff0000', sz: 30, val: 'double'}, 
+        		start: {color: 'ff0000', sz: 30, val: 'double'}, 
+        		bottom:{color: 'ff0000', sz: 30, val: 'double'}, 
+        		end:{color: 'ff0000', sz: 30, val: 'double'}, 
+        		tl2br:{color: 'ff0000', sz: 30, val: 'double'}
+        	};*/
         if (!defaultStyle.numFmt) defaultStyle.numFmt = 0;
 
         this.defaultStyle = defaultStyle;
 
         var gray125Style = JSON.parse(JSON.stringify(defaultStyle));
-        gray125Style.fill = { fgColor: { patternType: "gray125"}}
-
+        //gray125Style.fill = { fgColor: { patternType: "gray125"}}
+        gray125Style.fill = { patternType: "gray125"};
+		
         this.addStyles([defaultStyle, gray125Style]);
         return this;
       },
@@ -5667,7 +5682,7 @@ if ((typeof 'module' != 'undefined'  && typeof require != 'undefined') || (typeo
             .attr("numFmtId", numFmtId)
             .attr("fontId", fontId)
             .attr("fillId", fillId)
-            .attr("borderId", 0)
+            .attr("borderId", borderId)
             .attr("xfId", "0");
 
         if (fontId > 0) {
@@ -5743,7 +5758,7 @@ if ((typeof 'module' != 'undefined'  && typeof require != 'undefined') || (typeo
           }
         }
 
-        if (/^[0-9]+$/.exec(numFmt)) {
+        if (numFmt == +numFmt) {
           return numFmt; // we're matching an integer against some known code
         }
 
@@ -5813,21 +5828,52 @@ if ((typeof 'module' != 'undefined'  && typeof require != 'undefined') || (typeo
         if (!attributes) {
           return 0;
         }
-        var $border = XmlNode('border')
-            .append(new XmlNode('left'))
-            .append(new XmlNode('right'))
-            .append(new XmlNode('top'))
-            .append(new XmlNode('bottom'))
-            .append(new XmlNode('diagonal'));
+
+        var $border = XmlNode('border');
+
+        if(attributes.left) var left = new XmlNode('left').attr('style', attributes.left.style).append(new XmlNode('color').attr('indexed', '64'));
+        else var left = new XmlNode('left');
+
+        if(attributes.right) var right = new XmlNode('right').attr('style', attributes.right.style).append(new XmlNode('color').attr('indexed', '64'));
+        else var right = new XmlNode('right');
+
+        if(attributes.top) var top = new XmlNode('top').attr('style', attributes.top.style).append(new XmlNode('color').attr('indexed', '64'));
+        else var top = new XmlNode('top');
+
+        if(attributes.bottom) var bottom = new XmlNode('bottom').attr('style', attributes.bottom.style).append(new XmlNode('color').attr('indexed', '64'));
+        else var bottom = new XmlNode('bottom');
+
+        /*var $border = XmlNode('border');
+
+        var left = new XmlNode('left').attr('style', 'thin').append(new XmlNode('color').attr('indexed', '64'));
+
+        var right = new XmlNode('right').attr('style', 'thin').append(new XmlNode('color').attr('indexed', '64'));
+
+        var top = new XmlNode('top').attr('style', 'thin').append(new XmlNode('color').attr('indexed', '64'));
+        
+        var bottom = new XmlNode('bottom').attr('style', 'thin').append(new XmlNode('color').attr('indexed', '64'));
+
+            $border.append(left)
+            .append(right)
+            .append(top)
+            .append(bottom)
+            .append(new XmlNode('diagonal'));*/
+         var $border = XmlNode('border')	
+	        .append(left)
+            .append(right)
+            .append(top)
+            .append(bottom)
+			.append(new XmlNode('diagonal'));
 
         this.$borders.append($border);
 
         var count = this.$borders.children().length;
         this.$borders.attr('count', count);
-        return count;
+        return count-1;
       },
 
       toXml: function () {
+
         return this.$styles.toXml();
       }
     }.initialize(options||{});
